@@ -3,6 +3,8 @@
 [![PyPI](https://img.shields.io/pypi/v/multi-agent-cli.svg)](https://pypi.org/project/multi-agent-cli/)
 [![CI](https://github.com/kmcallorum/multi-agent-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/kmcallorum/multi-agent-cli/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/kmcallorum/multi-agent-cli/graph/badge.svg)](https://codecov.io/gh/kmcallorum/multi-agent-cli)
+[![Snyk](https://snyk.io/test/github/kmcallorum/multi-agent-cli/badge.svg)](https://snyk.io/test/github/kmcallorum/multi-agent-cli)
+[![pytest-agents](https://img.shields.io/badge/tested%20with-pytest--agents-blue)](https://github.com/kmcallorum/pytest-agents)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
