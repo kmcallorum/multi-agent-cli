@@ -29,6 +29,7 @@ from multi_agent_cli.executor import AgentExecutor
 from multi_agent_cli.factory import get_default_factory
 from multi_agent_cli.metrics import get_metrics, start_metrics_server
 from multi_agent_cli.models.agent import AgentsConfig
+from multi_agent_cli.models.results import DryRunResult, DryRunStep
 from multi_agent_cli.reporters import (
     JSONReporter,
     RichReporter,
@@ -308,6 +309,7 @@ def parallel(
 @click.argument("workflow_file", type=click.Path(exists=True))
 @click.option("--strict", is_flag=True, help="Fail on first error")
 @click.option("--continue-on-error", is_flag=True, help="Continue even if steps fail")
+@click.option("--dry-run", is_flag=True, help="Preview execution plan without running")
 @click.option("--output", "-o", help="Save workflow results to file")
 @pass_context
 def workflow(
@@ -315,6 +317,7 @@ def workflow(
     workflow_file: str,
     strict: bool,
     continue_on_error: bool,
+    dry_run: bool,
     output: str | None,
 ) -> None:
     """Run sequential workflow.
@@ -324,10 +327,30 @@ def workflow(
     Examples:
         multi-agent-cli workflow code-review.yaml
         multi-agent-cli workflow compliance-check.yaml --strict
+        multi-agent-cli workflow analysis.yaml --dry-run
     """
     try:
         # Load workflow
         wf = load_workflow(workflow_file)
+
+        # Handle dry-run mode
+        if dry_run:
+            dry_result = _build_dry_run_result(wf)
+            ctx.reporter.display_dry_run_result(dry_result)
+
+            # Save if requested
+            if output:
+                save_result_to_file(dry_result, output)
+                if not ctx.quiet:
+                    console.print(f"[dim]Dry run results saved to {output}[/dim]")
+
+            # Exit with error if invalid
+            # Note: This is currently unreachable because load_workflow validates
+            # dependencies first. Kept for defensive programming if validation
+            # is ever changed or bypassed.
+            if not dry_result.is_valid:  # pragma: no cover
+                sys.exit(1)
+            return
 
         config = ctx.config or create_default_config()
         factory = get_default_factory()
@@ -375,6 +398,51 @@ def workflow(
         ctx.reporter.display_error(f"Unexpected error: {e}")
         get_metrics().record_cli_error("workflow")
         sys.exit(2)
+
+
+def _build_dry_run_result(wf: Any) -> DryRunResult:
+    """Build dry-run result from workflow.
+
+    Args:
+        wf: Workflow to analyze.
+
+    Returns:
+        DryRunResult with execution plan preview.
+    """
+    # Validate dependencies
+    validation_errors = wf.validate_dependencies()
+
+    # Build steps
+    steps = []
+    for i, step in enumerate(wf.steps, start=1):
+        dry_step = DryRunStep(
+            order=i,
+            name=step.name,
+            agent=step.agent,
+            action=step.action,
+            params=step.params,
+            depends_on=step.depends_on,
+            timeout=step.timeout,
+            on_error=step.on_error,
+        )
+        steps.append(dry_step)
+
+    # Build quality gates dict
+    quality_gates = {
+        "max_fixmes": wf.quality_gates.max_fixmes,
+        "min_documentation_score": wf.quality_gates.min_documentation_score,
+        "max_dead_code_percent": wf.quality_gates.max_dead_code_percent,
+    }
+
+    return DryRunResult(
+        workflow_name=wf.name,
+        workflow_description=wf.description,
+        total_steps=len(wf.steps),
+        steps=steps,
+        validation_errors=validation_errors,
+        quality_gates=quality_gates,
+        is_valid=len(validation_errors) == 0,
+    )
 
 
 @cli.command("list")

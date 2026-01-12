@@ -10,7 +10,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from multi_agent_cli.models.results import AgentResult, WorkflowResult
+from multi_agent_cli.models.results import AgentResult, DryRunResult, WorkflowResult
 
 
 class Reporter(Protocol):
@@ -188,6 +188,63 @@ class RichReporter:
         """
         self.console.print(f"[blue]i[/blue] {message}")
 
+    def display_dry_run_result(self, result: DryRunResult) -> None:
+        """Display dry-run preview.
+
+        Args:
+            result: Dry-run result to display.
+        """
+        # Header
+        status_color = "green" if result.is_valid else "red"
+        status_text = "VALID" if result.is_valid else "INVALID"
+
+        self.console.print(
+            f"\n[bold cyan]DRY RUN[/bold cyan] - "
+            f"[{status_color}]{status_text}[/{status_color}]"
+        )
+        self.console.print(f"[bold]{result.workflow_name}[/bold]")
+        if result.workflow_description:
+            self.console.print(f"[dim]{result.workflow_description}[/dim]")
+        self.console.print()
+
+        # Validation errors if any
+        if result.validation_errors:
+            self.console.print("[red]Validation Errors:[/red]")
+            for error in result.validation_errors:
+                self.console.print(f"  [red]x[/red] {error}")
+            self.console.print()
+
+        # Steps table
+        table = Table(title="Execution Plan", show_header=True)
+        table.add_column("#", style="dim", width=3)
+        table.add_column("Step", style="cyan")
+        table.add_column("Agent", style="magenta")
+        table.add_column("Action", style="blue")
+        table.add_column("Depends On", style="dim")
+        table.add_column("On Error", style="yellow")
+
+        for step in result.steps:
+            deps = ", ".join(step.depends_on) if step.depends_on else "-"
+            table.add_row(
+                str(step.order),
+                step.name,
+                step.agent,
+                step.action,
+                deps,
+                step.on_error,
+            )
+
+        self.console.print(table)
+
+        # Quality gates
+        if any(v is not None for v in result.quality_gates.values()):
+            self.console.print("\n[bold]Quality Gates:[/bold]")
+            for gate, value in result.quality_gates.items():
+                if value is not None:
+                    self.console.print(f"  [dim]-[/dim] {gate}: {value}")
+
+        self.console.print(f"\n[dim]Total steps: {result.total_steps}[/dim]")
+
 
 class JSONReporter:
     """Output results as JSON."""
@@ -246,6 +303,14 @@ class JSONReporter:
             message: Success message.
         """
         self.console.print(json.dumps({"success": message}, indent=self.indent))
+
+    def display_dry_run_result(self, result: DryRunResult) -> None:
+        """Display dry-run result as JSON.
+
+        Args:
+            result: Dry-run result to display.
+        """
+        self.console.print(result.model_dump_json(indent=self.indent))
 
 
 class TableReporter:
@@ -351,6 +416,62 @@ class TableReporter:
         """
         self.console.print(f"[green]Success:[/green] {message}")
 
+    def display_dry_run_result(self, result: DryRunResult) -> None:
+        """Display dry-run result as table.
+
+        Args:
+            result: Dry-run result to display.
+        """
+        # Status
+        status = "VALID" if result.is_valid else "INVALID"
+        status_style = "green" if result.is_valid else "red"
+        self.console.print(
+            f"[bold]DRY RUN[/bold] - [{status_style}]{status}[/{status_style}]"
+        )
+        self.console.print(f"Workflow: {result.workflow_name}")
+        self.console.print()
+
+        # Validation errors
+        if result.validation_errors:
+            self.console.print("[red]Validation Errors:[/red]")
+            for error in result.validation_errors:
+                self.console.print(f"  - {error}")
+            self.console.print()
+
+        # Steps table
+        table = Table(title="Execution Plan", show_header=True)
+        table.add_column("#", width=3)
+        table.add_column("Step", style="cyan")
+        table.add_column("Agent")
+        table.add_column("Action")
+        table.add_column("Depends On")
+        table.add_column("On Error")
+
+        for step in result.steps:
+            deps = ", ".join(step.depends_on) if step.depends_on else "-"
+            table.add_row(
+                str(step.order),
+                step.name,
+                step.agent,
+                step.action,
+                deps,
+                step.on_error,
+            )
+
+        self.console.print(table)
+
+        # Quality gates
+        gates_table = Table(title="Quality Gates", show_header=True)
+        gates_table.add_column("Gate", style="cyan")
+        gates_table.add_column("Value")
+
+        for gate, value in result.quality_gates.items():
+            if value is not None:
+                gates_table.add_row(gate, str(value))
+
+        if any(v is not None for v in result.quality_gates.values()):
+            self.console.print(gates_table)
+
 
 def get_reporter(
     format_type: str,
@@ -376,7 +497,7 @@ def get_reporter(
 
 
 def save_result_to_file(
-    result: AgentResult | WorkflowResult,
+    result: AgentResult | WorkflowResult | DryRunResult,
     path: str | Path,
 ) -> None:
     """Save result to JSON file.

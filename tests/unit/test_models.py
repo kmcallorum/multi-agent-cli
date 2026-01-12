@@ -10,7 +10,12 @@ from multi_agent_cli.models.agent import (
     OutputConfig,
     SettingsConfig,
 )
-from multi_agent_cli.models.results import AgentResult, WorkflowResult
+from multi_agent_cli.models.results import (
+    AgentResult,
+    DryRunResult,
+    DryRunStep,
+    WorkflowResult,
+)
 from multi_agent_cli.models.workflow import QualityGates, Workflow, WorkflowStep
 
 
@@ -327,3 +332,102 @@ class TestWorkflowResult:
         )
         assert result.steps_completed == 0
         assert result.summary["success_rate"] == 0.0
+
+
+@pytest.mark.unit
+class TestDryRunStep:
+    """Tests for DryRunStep model."""
+
+    def test_create_step(self) -> None:
+        """Test creating dry-run step."""
+        step = DryRunStep(
+            order=1,
+            name="Test Step",
+            agent="pm",
+            action="track_tasks",
+            params={"path": "./src"},
+            depends_on=["Previous"],
+            timeout=60,
+            on_error="continue",
+        )
+        assert step.order == 1
+        assert step.name == "Test Step"
+        assert step.agent == "pm"
+        assert step.action == "track_tasks"
+        assert step.params == {"path": "./src"}
+        assert step.depends_on == ["Previous"]
+        assert step.timeout == 60
+        assert step.on_error == "continue"
+
+    def test_create_step_minimal(self) -> None:
+        """Test creating dry-run step with minimal fields."""
+        step = DryRunStep(
+            order=1,
+            name="Minimal",
+            agent="research",
+            action="analyze",
+        )
+        assert step.params == {}
+        assert step.depends_on == []
+        assert step.timeout is None
+        assert step.on_error == "fail"
+
+
+@pytest.mark.unit
+class TestDryRunResult:
+    """Tests for DryRunResult model."""
+
+    def test_create_valid_result(self) -> None:
+        """Test creating valid dry-run result."""
+        result = DryRunResult(
+            workflow_name="Test Workflow",
+            workflow_description="A test",
+            total_steps=2,
+            steps=[
+                DryRunStep(order=1, name="Step 1", agent="pm", action="track"),
+                DryRunStep(order=2, name="Step 2", agent="research", action="analyze"),
+            ],
+            validation_errors=[],
+            quality_gates={"max_fixmes": 10},
+            is_valid=True,
+        )
+        assert result.workflow_name == "Test Workflow"
+        assert result.total_steps == 2
+        assert len(result.steps) == 2
+        assert result.is_valid is True
+        assert result.validation_errors == []
+
+    def test_create_invalid_result(self) -> None:
+        """Test creating invalid dry-run result."""
+        result = DryRunResult(
+            workflow_name="Invalid Workflow",
+            workflow_description="",
+            total_steps=1,
+            steps=[
+                DryRunStep(
+                    order=1,
+                    name="Step 1",
+                    agent="pm",
+                    action="track",
+                    depends_on=["Missing"],
+                ),
+            ],
+            validation_errors=["Step 'Step 1' depends on non-existent step 'Missing'"],
+            quality_gates={},
+            is_valid=False,
+        )
+        assert result.is_valid is False
+        assert len(result.validation_errors) == 1
+        assert "Missing" in result.validation_errors[0]
+
+    def test_default_values(self) -> None:
+        """Test default values for dry-run result."""
+        result = DryRunResult(
+            workflow_name="Test",
+            total_steps=0,
+            is_valid=True,
+        )
+        assert result.workflow_description == ""
+        assert result.steps == []
+        assert result.validation_errors == []
+        assert result.quality_gates == {}

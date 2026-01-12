@@ -9,7 +9,12 @@ from pathlib import Path
 import pytest
 from rich.console import Console
 
-from multi_agent_cli.models.results import AgentResult, WorkflowResult
+from multi_agent_cli.models.results import (
+    AgentResult,
+    DryRunResult,
+    DryRunStep,
+    WorkflowResult,
+)
 from multi_agent_cli.reporters import (
     JSONReporter,
     RichReporter,
@@ -57,6 +62,72 @@ def workflow_result(
         workflow_name="Test Workflow",
         results=[success_result, error_result],
         quality_gates_passed=False,
+    )
+
+
+@pytest.fixture
+def valid_dry_run_result() -> DryRunResult:
+    """Create valid dry-run result."""
+    return DryRunResult(
+        workflow_name="Test Workflow",
+        workflow_description="A test workflow",
+        total_steps=2,
+        steps=[
+            DryRunStep(
+                order=1,
+                name="Step 1",
+                agent="pm",
+                action="track_tasks",
+                params={"path": "./src"},
+                depends_on=[],
+                timeout=60,
+                on_error="fail",
+            ),
+            DryRunStep(
+                order=2,
+                name="Step 2",
+                agent="research",
+                action="analyze_document",
+                params={"path": "./README.md"},
+                depends_on=["Step 1"],
+                timeout=None,
+                on_error="continue",
+            ),
+        ],
+        validation_errors=[],
+        quality_gates={
+            "max_fixmes": 10,
+            "min_documentation_score": 0.7,
+            "max_dead_code_percent": None,
+        },
+        is_valid=True,
+    )
+
+
+@pytest.fixture
+def invalid_dry_run_result() -> DryRunResult:
+    """Create invalid dry-run result with validation errors."""
+    return DryRunResult(
+        workflow_name="Invalid Workflow",
+        workflow_description="",
+        total_steps=1,
+        steps=[
+            DryRunStep(
+                order=1,
+                name="Step 1",
+                agent="pm",
+                action="track_tasks",
+                params={},
+                depends_on=["NonexistentStep"],
+                timeout=None,
+                on_error="fail",
+            ),
+        ],
+        validation_errors=[
+            "Step 'Step 1' depends on non-existent step 'NonexistentStep'"
+        ],
+        quality_gates={},
+        is_valid=False,
     )
 
 
@@ -195,6 +266,54 @@ class TestRichReporter:
         output = string_console.file.getvalue()  # type: ignore
         assert "Info message" in output
 
+    def test_display_dry_run_valid(
+        self,
+        string_console: Console,
+        valid_dry_run_result: DryRunResult,
+    ) -> None:
+        """Test displaying valid dry-run result."""
+        reporter = RichReporter(string_console)
+        reporter.display_dry_run_result(valid_dry_run_result)
+
+        output = string_console.file.getvalue()  # type: ignore
+        assert "DRY RUN" in output
+        assert "VALID" in output
+        assert "Test Workflow" in output
+        assert "Execution Plan" in output
+        assert "Step 1" in output
+        assert "Step 2" in output
+        assert "pm" in output
+        assert "research" in output
+
+    def test_display_dry_run_invalid(
+        self,
+        string_console: Console,
+        invalid_dry_run_result: DryRunResult,
+    ) -> None:
+        """Test displaying invalid dry-run result."""
+        reporter = RichReporter(string_console)
+        reporter.display_dry_run_result(invalid_dry_run_result)
+
+        output = string_console.file.getvalue()  # type: ignore
+        assert "DRY RUN" in output
+        assert "INVALID" in output
+        assert "Validation Errors" in output
+        assert "NonexistentStep" in output
+
+    def test_display_dry_run_with_quality_gates(
+        self,
+        string_console: Console,
+        valid_dry_run_result: DryRunResult,
+    ) -> None:
+        """Test displaying dry-run result with quality gates."""
+        reporter = RichReporter(string_console)
+        reporter.display_dry_run_result(valid_dry_run_result)
+
+        output = string_console.file.getvalue()  # type: ignore
+        assert "Quality Gates" in output
+        assert "max_fixmes" in output
+        assert "10" in output
+
 
 @pytest.mark.unit
 class TestJSONReporter:
@@ -269,6 +388,21 @@ class TestJSONReporter:
         data = json.loads(output)
         assert data["success"] == "Success message"
 
+    def test_display_dry_run_result(
+        self,
+        string_console: Console,
+        valid_dry_run_result: DryRunResult,
+    ) -> None:
+        """Test displaying dry-run result as JSON."""
+        reporter = JSONReporter(string_console)
+        reporter.display_dry_run_result(valid_dry_run_result)
+
+        output = string_console.file.getvalue()  # type: ignore
+        data = json.loads(output)
+        assert data["workflow_name"] == "Test Workflow"
+        assert data["is_valid"] is True
+        assert len(data["steps"]) == 2
+
 
 @pytest.mark.unit
 class TestTableReporter:
@@ -338,6 +472,34 @@ class TestTableReporter:
         output = string_console.file.getvalue()  # type: ignore
         assert "Success" in output
         assert "Success message" in output
+
+    def test_display_dry_run_valid(
+        self,
+        string_console: Console,
+        valid_dry_run_result: DryRunResult,
+    ) -> None:
+        """Test displaying valid dry-run result as table."""
+        reporter = TableReporter(string_console)
+        reporter.display_dry_run_result(valid_dry_run_result)
+
+        output = string_console.file.getvalue()  # type: ignore
+        assert "DRY RUN" in output
+        assert "VALID" in output
+        assert "Execution Plan" in output
+
+    def test_display_dry_run_invalid(
+        self,
+        string_console: Console,
+        invalid_dry_run_result: DryRunResult,
+    ) -> None:
+        """Test displaying invalid dry-run result as table."""
+        reporter = TableReporter(string_console)
+        reporter.display_dry_run_result(invalid_dry_run_result)
+
+        output = string_console.file.getvalue()  # type: ignore
+        assert "DRY RUN" in output
+        assert "INVALID" in output
+        assert "Validation Errors" in output
 
 
 @pytest.mark.unit

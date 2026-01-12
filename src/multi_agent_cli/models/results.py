@@ -58,6 +58,39 @@ class AgentResult(BaseModel):
         )
 
 
+class DryRunStep(BaseModel):
+    """Represents a step in dry-run preview."""
+
+    order: int = Field(..., description="Execution order (1-based)")
+    name: str = Field(..., description="Step name")
+    agent: str = Field(..., description="Agent to execute")
+    action: str = Field(..., description="Action to perform")
+    params: dict[str, Any] = Field(
+        default_factory=dict, description="Action parameters"
+    )
+    depends_on: list[str] = Field(default_factory=list, description="Step dependencies")
+    timeout: int | None = Field(default=None, description="Step-specific timeout")
+    on_error: str = Field(default="fail", description="Error handling behavior")
+
+
+class DryRunResult(BaseModel):
+    """Result from dry-run workflow validation."""
+
+    workflow_name: str = Field(..., description="Workflow name")
+    workflow_description: str = Field(default="", description="Workflow description")
+    total_steps: int = Field(..., description="Total number of steps")
+    steps: list[DryRunStep] = Field(
+        default_factory=list, description="Steps to execute"
+    )
+    validation_errors: list[str] = Field(
+        default_factory=list, description="Validation errors found"
+    )
+    quality_gates: dict[str, Any] = Field(
+        default_factory=dict, description="Quality gate configuration"
+    )
+    is_valid: bool = Field(..., description="Whether workflow is valid")
+
+
 class WorkflowResult(BaseModel):
     """Result from workflow execution."""
 

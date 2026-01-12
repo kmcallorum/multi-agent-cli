@@ -205,6 +205,108 @@ class TestWorkflowCommand:
         result = cli_runner.invoke(cli, ["-q", "workflow", str(temp_workflow_file)])
         assert result.exit_code == 0
 
+    def test_workflow_dry_run(
+        self, cli_runner: CliRunner, temp_workflow_file: Path
+    ) -> None:
+        """Test workflow dry-run mode."""
+        result = cli_runner.invoke(
+            cli, ["workflow", str(temp_workflow_file), "--dry-run"]
+        )
+        assert result.exit_code == 0
+        assert "DRY RUN" in result.output
+        assert "Execution Plan" in result.output
+
+    def test_workflow_dry_run_json_format(
+        self, cli_runner: CliRunner, temp_workflow_file: Path
+    ) -> None:
+        """Test workflow dry-run with JSON output."""
+        result = cli_runner.invoke(
+            cli, ["--format", "json", "workflow", str(temp_workflow_file), "--dry-run"]
+        )
+        assert result.exit_code == 0
+        assert "workflow_name" in result.output
+        assert "is_valid" in result.output
+
+    def test_workflow_dry_run_table_format(
+        self, cli_runner: CliRunner, temp_workflow_file: Path
+    ) -> None:
+        """Test workflow dry-run with table output."""
+        result = cli_runner.invoke(
+            cli, ["--format", "table", "workflow", str(temp_workflow_file), "--dry-run"]
+        )
+        assert result.exit_code == 0
+        assert "DRY RUN" in result.output
+
+    def test_workflow_dry_run_with_output(
+        self, cli_runner: CliRunner, temp_workflow_file: Path, tmp_path: Path
+    ) -> None:
+        """Test workflow dry-run with output file."""
+        output_file = tmp_path / "dry_run.json"
+        result = cli_runner.invoke(
+            cli,
+            [
+                "workflow",
+                str(temp_workflow_file),
+                "--dry-run",
+                "--output",
+                str(output_file),
+            ],
+        )
+        assert result.exit_code == 0
+        assert output_file.exists()
+
+    def test_workflow_dry_run_invalid(
+        self, cli_runner: CliRunner, tmp_path: Path
+    ) -> None:
+        """Test dry-run with invalid workflow (missing dependency)."""
+        workflow_content = """
+name: Invalid Workflow
+steps:
+  - name: Step 1
+    agent: pm
+    action: track_tasks
+    depends_on:
+      - NonexistentStep
+"""
+        workflow_file = tmp_path / "invalid_deps.yaml"
+        workflow_file.write_text(workflow_content)
+
+        # Invalid workflows are caught during load_workflow before dry-run
+        result = cli_runner.invoke(cli, ["workflow", str(workflow_file), "--dry-run"])
+        assert result.exit_code == 1
+        assert "Invalid workflow dependencies" in result.output
+        assert "NonexistentStep" in result.output
+
+    def test_workflow_dry_run_quiet(
+        self, cli_runner: CliRunner, temp_workflow_file: Path
+    ) -> None:
+        """Test workflow dry-run in quiet mode."""
+        result = cli_runner.invoke(
+            cli, ["-q", "workflow", str(temp_workflow_file), "--dry-run"]
+        )
+        assert result.exit_code == 0
+
+    def test_workflow_dry_run_quiet_with_output(
+        self, cli_runner: CliRunner, temp_workflow_file: Path, tmp_path: Path
+    ) -> None:
+        """Test workflow dry-run in quiet mode with output file."""
+        output_file = tmp_path / "dry_run_quiet.json"
+        result = cli_runner.invoke(
+            cli,
+            [
+                "-q",
+                "workflow",
+                str(temp_workflow_file),
+                "--dry-run",
+                "--output",
+                str(output_file),
+            ],
+        )
+        assert result.exit_code == 0
+        assert output_file.exists()
+        # In quiet mode, shouldn't print "saved to" message
+        assert "saved to" not in result.output
+
 
 @pytest.mark.unit
 class TestListCommand:
