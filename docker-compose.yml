@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  multi-agent-cli:
+    build: .
+    volumes:
+      - ./configs:/app/configs:ro
+      - ./results:/app/results
+      - ./src:/workspace/src:ro
+    environment:
+      - PYTEST_AGENTS_CONFIG=/app/configs/agents.yaml
+    command: run pm track_tasks --path /workspace/src
+
+  metrics:
+    build: .
+    command: metrics --port 9090 --host 0.0.0.0
+    ports:
+      - "9090:9090"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9090/metrics"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  parallel:
+    build: .
+    volumes:
+      - ./configs:/app/configs:ro
+      - ./results:/app/results
+      - ./src:/workspace/src:ro
+    environment:
+      - PYTEST_AGENTS_CONFIG=/app/configs/agents.yaml
+    command: parallel --agents pm,research,index --path /workspace/src --output /app/results/parallel.json

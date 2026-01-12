@@ -1,0 +1,34 @@
+# Example Workflow Definition
+# Sequential workflow for code quality analysis
+
+name: "Code Quality Analysis"
+description: "Comprehensive code quality check using multiple agents"
+
+steps:
+  - name: "Track Technical Debt"
+    agent: pm
+    action: track_tasks
+    params:
+      path: "./src"
+    on_error: continue
+
+  - name: "Analyze Documentation"
+    agent: research
+    action: analyze_document
+    params:
+      path: "./README.md"
+    on_error: fail
+
+  - name: "Index Codebase"
+    agent: index
+    action: index_repository
+    params:
+      path: "./src"
+    depends_on:
+      - "Track Technical Debt"
+    timeout: 180
+
+quality_gates:
+  max_fixmes: 5
+  min_documentation_score: 0.8
+  max_dead_code_percent: 5

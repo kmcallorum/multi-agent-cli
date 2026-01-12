@@ -1,0 +1,33 @@
+# Multi-agent CLI Configuration
+# Copy this file to agents.yaml and customize as needed
+
+agents:
+  pm:
+    enabled: true
+    path: "./pm/dist/index.js"
+    timeout: 60
+    env: {}
+
+  research:
+    enabled: true
+    path: "./research/dist/index.js"
+    timeout: 90
+    env: {}
+
+  index:
+    enabled: true
+    path: "./index/dist/index.js"
+    timeout: 120
+    env: {}
+
+settings:
+  max_parallel_workers: 3
+  default_timeout: 60
+  metrics_enabled: true
+  metrics_port: 9090
+
+output:
+  format: "rich"  # rich, json, table
+  verbose: false
+  save_results: true
+  results_dir: "./results"
